@@ -1,7 +1,8 @@
 from typing import final
 
-import torch.nn as nn
 import torch
+import torch.nn as nn
+from torch.types import Tensor
 
 
 @final
@@ -16,6 +17,9 @@ class Tokenizer:
 
     def decode(self, tokens: list[int]) -> str:
         return "".join([self.i_to_s[i] for i in tokens])
+
+    def vocab_size(self) -> int:
+        return len(self.i_to_s)
 
 
 def _batch(
@@ -47,6 +51,25 @@ class Data:
         return _batch(self.validation, self.context_size, self.batch_size)
 
 
+class BigramLanguageModel(nn.Module):
+    def __init__(self, vocab_size: int):
+        super().__init__()
+        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+
+    def forward(self, idx: Tensor, targets: Tensor):
+        logits = self.token_embedding_table(idx)
+        # Logits have dimension (Batch, Time, Channel)
+        B, T, C = logits.shape
+        logits = logits.view(B * T, C)
+        # Targets has have dimension (Batch, Time)
+        B, T = targets.shape
+        targets = targets.view(B * T)
+
+        loss = nn.functional.cross_entropy(logits, targets)
+
+        return logits, loss
+
+
 def main():
     torch.manual_seed(1337)
 
@@ -60,21 +83,11 @@ def main():
 
     xb, yb = data.training_batch()
 
-    print("inputs:")
-    print(xb.shape)
-    print(xb)
+    model = BigramLanguageModel(tokenizer.vocab_size())
 
-    print("targets:")
-    print(yb.shape)
-    print(yb)
-
-    print("---")
-
-    for b in range(batch_size):
-        for t in range(context_size):
-            context = xb[b, : t + 1]
-            target = yb[b, t]
-            print(f"When input is {context.tolist()}, the target is {target}")
+    logits, loss = model(xb, yb)
+    print(logits.shape)
+    print(f"Loss: {loss}")
 
 
 if __name__ == "__main__":
