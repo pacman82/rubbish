@@ -1,30 +1,37 @@
 import torch
 
-from .tokenizer import Tokenizer
 from .data import Data
 from .model import BigramLanguageModel
+from .tokenizer import Tokenizer
+
+context_size = 8
+batch_size = 32
+learning_rate = 1e-3
+max_iterations = 3000
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def main() -> None:
     torch.manual_seed(1337)
 
+    print(f"Using device: {device}")
+
     with open("input.txt", "r", encoding="utf-8") as f:
         text = f.read()
 
     tokenizer = Tokenizer(text)
-    context_size = 8
-    batch_size = 32
-    data = Data(text, tokenizer, context_size, batch_size)
+    data = Data(text, tokenizer, context_size, batch_size, device)
 
     model = BigramLanguageModel(tokenizer.vocab_size())
+    model = model.to(device)
 
-    idx = torch.zeros((1, 1), dtype=torch.long)
-    generated_batch = model.generate(idx=idx, max_new_tokens=100)
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
+    generated_batch = model.generate(idx=context, max_new_tokens=100)
     print(tokenizer.decode(generated_batch[0].tolist()))
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    for steps in range(10000):
+    for steps in range(max_iterations):
         xb, yb = data.training_batch()
         _, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none=True)
@@ -33,6 +40,6 @@ def main() -> None:
 
     print(loss.item())
 
-    idx = torch.zeros((1, 1), dtype=torch.long)
-    generated_batch = model.generate(idx=idx, max_new_tokens=100)
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
+    generated_batch = model.generate(idx=context, max_new_tokens=100)
     print(tokenizer.decode(generated_batch[0].tolist()))

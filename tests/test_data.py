@@ -1,11 +1,15 @@
+import torch
+
 from rubbish import Data, Tokenizer
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def test_sample_training_batches():
     text = "Hello, World!"
     tokenizer = Tokenizer(text)
 
-    data = Data(text, tokenizer, context_size=8, batch_size=4)
+    data = Data(text, tokenizer, context_size=8, batch_size=4, device=device)
 
     xb, yb = data.training_batch()
     assert xb.shape == (4, 8), f"Expected input shape (4, 8), got {xb.shape}"
