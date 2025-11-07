@@ -6,9 +6,34 @@ from .tokenizer import Tokenizer
 
 context_size = 8
 batch_size = 32
-learning_rate = 1e-3
+learning_rate = 1e-2
 max_iterations = 3000
 device = "cuda" if torch.cuda.is_available() else "cpu"
+eval_iterations = 200
+eval_interval = 300
+
+
+@torch.no_grad()
+def estimate_loss(model: BigramLanguageModel, data: Data):
+    out = {}
+    model.eval()
+    for split in ["train", "val"]:
+        losses = torch.zeros(eval_iterations)
+        for k in range(eval_iterations):
+            xb, yb = (
+                data.training_batch() if split == "train" else data.validation_batch()
+            )
+            _, loss = model(xb, yb)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
+
+
+def print_generate_text(model: BigramLanguageModel, tokenizer: Tokenizer) -> None:
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
+    generated_batch = model.generate(idx=context, max_new_tokens=100)
+    print(tokenizer.decode(generated_batch[0].tolist()))
 
 
 def main() -> None:
@@ -25,21 +50,22 @@ def main() -> None:
     model = BigramLanguageModel(tokenizer.vocab_size())
     model = model.to(device)
 
-    context = torch.zeros((1, 1), dtype=torch.long, device=device)
-    generated_batch = model.generate(idx=context, max_new_tokens=100)
-    print(tokenizer.decode(generated_batch[0].tolist()))
+    print_generate_text(model, tokenizer)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    for steps in range(max_iterations):
+    for step in range(max_iterations):
+        if step % eval_interval == 0:
+            losses = estimate_loss(model, data)
+            print(
+                f"step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+            )
+            print_generate_text(model, tokenizer)
+
         xb, yb = data.training_batch()
         _, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
-    print(loss.item())
-
-    context = torch.zeros((1, 1), dtype=torch.long, device=device)
-    generated_batch = model.generate(idx=context, max_new_tokens=100)
-    print(tokenizer.decode(generated_batch[0].tolist()))
+    print_generate_text(model, tokenizer)
