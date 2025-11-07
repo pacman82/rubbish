@@ -3,31 +3,11 @@ import torch
 from .data import Data
 from .model import BigramLanguageModel
 from .tokenizer import Tokenizer
+from .train import train
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 context_size = 8
 batch_size = 32
-learning_rate = 1e-2
-max_iterations = 3000
-device = "cuda" if torch.cuda.is_available() else "cpu"
-eval_iterations = 200
-eval_interval = 300
-
-
-@torch.no_grad()
-def estimate_loss(model: BigramLanguageModel, data: Data):
-    out = {}
-    model.eval()
-    for split in ["train", "val"]:
-        losses = torch.zeros(eval_iterations)
-        for k in range(eval_iterations):
-            xb, yb = (
-                data.training_batch() if split == "train" else data.validation_batch()
-            )
-            _, loss = model(xb, yb)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
-    model.train()
-    return out
 
 
 def print_generate_text(model: BigramLanguageModel, tokenizer: Tokenizer) -> None:
@@ -52,20 +32,6 @@ def main() -> None:
 
     print_generate_text(model, tokenizer)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-
-    for step in range(max_iterations):
-        if step % eval_interval == 0:
-            losses = estimate_loss(model, data)
-            print(
-                f"step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
-            )
-            print_generate_text(model, tokenizer)
-
-        xb, yb = data.training_batch()
-        _, loss = model(xb, yb)
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
+    train(model, data)
 
     print_generate_text(model, tokenizer)
