@@ -2,7 +2,6 @@ import torch
 
 from rubbish.data import Data
 from rubbish.model import BigramLanguageModel
-from rubbish.tokenizer import Tokenizer
 
 learning_rate = 1e-2
 max_iterations = 3000
