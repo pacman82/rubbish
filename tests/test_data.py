@@ -1,4 +1,4 @@
-from main import Data, Tokenizer
+from rubbish import Data, Tokenizer
 
 
 def test_sample_training_batches():

@@ -119,7 +119,3 @@ def main():
     idx = torch.zeros((1, 1), dtype=torch.long)
     generated_batch = model.generate(idx=idx, max_new_tokens=100)
     print(tokenizer.decode(generated_batch[0].tolist()))
-
-
-if __name__ == "__main__":
-    main()

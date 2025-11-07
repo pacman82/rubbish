@@ -1,4 +1,4 @@
-from main import Tokenizer
+from rubbish import Tokenizer
 
 
 def test_text_should_be_the_same_after_decoding_encoding():
