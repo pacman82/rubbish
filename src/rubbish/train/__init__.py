@@ -3,10 +3,10 @@ import torch
 from rubbish.data import Data
 from rubbish.model import CONTEXT_SIZE, BigramLanguageModel
 
-learning_rate = 1e-2
-max_iterations = 3000
+learning_rate = 1e-3
+max_iterations = 50000
 eval_iterations = 200
-eval_interval = 300
+eval_interval = 500
 
 
 @torch.no_grad()

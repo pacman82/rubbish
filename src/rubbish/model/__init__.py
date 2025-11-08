@@ -8,6 +8,32 @@ NUMBER_OF_EMBEDDING_DIMENSIONS = 32
 CONTEXT_SIZE = 8
 
 
+class Head(nn.Module):
+    def __init__(self, head_size) -> None:
+        super().__init__()
+        self.key = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, head_size, bias=False)
+        self.query = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, head_size, bias=False)
+        self.value = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, head_size, bias=False)
+        self.register_buffer("tril", torch.tril(torch.ones(CONTEXT_SIZE, CONTEXT_SIZE)))
+
+    def forward(self, embedding: Tensor) -> Tensor:
+        B, T, C = embedding.shape
+
+        keys = self.key(embedding)
+        queries = self.query(embedding)
+
+        attention_scores = queries @ keys.transpose(-2, -1) * (C**-0.5)
+        attention_scores = attention_scores.masked_fill(
+            self.tril[:T, :T] == 0, float("-inf")
+        )
+        attention_weights = nn.functional.softmax(attention_scores, dim=-1)
+
+        values = self.value(embedding)
+        out = attention_weights @ values
+
+        return out
+
+
 class BigramLanguageModel(nn.Module):
     def __init__(self, vocab_size: int):
         super().__init__()
@@ -17,6 +43,7 @@ class BigramLanguageModel(nn.Module):
         self.positional_embedding_table: nn.Embedding = nn.Embedding(
             CONTEXT_SIZE, NUMBER_OF_EMBEDDING_DIMENSIONS
         )
+        self.self_attention_head = Head(head_size=NUMBER_OF_EMBEDDING_DIMENSIONS)
         self.lm_head: nn.Linear = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, vocab_size)
 
     @override
@@ -26,11 +53,11 @@ class BigramLanguageModel(nn.Module):
         B, T = idx.shape
 
         token_embeddings = self.token_embedding_table(idx)
-        # positional_embeddings = self.positional_embedding_table(
-        #     torch.arange(T, device=idx.device)
-        # )
-        # embeddings = token_embeddings + positional_embeddings
-        embeddings = token_embeddings
+        positional_embeddings = self.positional_embedding_table(
+            torch.arange(T, device=idx.device)
+        )
+        embeddings = token_embeddings + positional_embeddings
+        embeddings = self.self_attention_head(embeddings)
         logits = self.lm_head(embeddings)
 
         if targets is not None:
@@ -48,10 +75,9 @@ class BigramLanguageModel(nn.Module):
         return logits, loss
 
     def generate(self, idx: Tensor, max_new_tokens: int) -> Tensor:
-        print(idx.shape)
-        print(idx)
         for _ in range(max_new_tokens):
-            logits, _loss = self(idx)
+            idx_cond = idx[:, -CONTEXT_SIZE:]
+            logits, _loss = self(idx_cond)
             logits = logits[:, -1, :]
             probs = nn.functional.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
