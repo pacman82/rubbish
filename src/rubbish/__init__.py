@@ -7,12 +7,14 @@ from .train import train
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-batch_size = 32
+batch_size = 64
 
 
-def print_generate_text(model: BigramLanguageModel, tokenizer: Tokenizer) -> None:
+def print_generate_text(
+    model: BigramLanguageModel, tokenizer: Tokenizer, max_new_tokens=100
+) -> None:
     context = torch.zeros((1, 1), dtype=torch.long, device=device)
-    generated_batch = model.generate(idx=context, max_new_tokens=100)
+    generated_batch = model.generate(idx=context, max_new_tokens=max_new_tokens)
     print(tokenizer.decode(generated_batch[0].tolist()))
 
 
@@ -36,4 +38,4 @@ def main() -> None:
 
     train(model, data, device)
 
-    print_generate_text(model, tokenizer)
+    print_generate_text(model, tokenizer, max_new_tokens=4096)

@@ -5,7 +5,10 @@ import torch.nn as nn
 from torch.types import Tensor
 
 NUMBER_OF_EMBEDDING_DIMENSIONS = 32
-CONTEXT_SIZE = 8
+CONTEXT_SIZE = 256
+DROPOUT = 0.2
+NUMBER_OF_HEADS = 6
+NUMBER_OF_LAYERS = 6
 
 
 class Head(nn.Module):
@@ -15,6 +18,8 @@ class Head(nn.Module):
         self.query = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, head_size, bias=False)
         self.value = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, head_size, bias=False)
         self.register_buffer("tril", torch.tril(torch.ones(CONTEXT_SIZE, CONTEXT_SIZE)))
+
+        self.dropout = nn.Dropout(DROPOUT)
 
     def forward(self, embedding: Tensor) -> Tensor:
         B, T, C = embedding.shape
@@ -27,6 +32,7 @@ class Head(nn.Module):
             self.tril[:T, :T] == 0, float("-inf")
         )
         attention_weights = nn.functional.softmax(attention_scores, dim=-1)
+        attention_weights = self.dropout(attention_weights)
 
         values = self.value(embedding)
         out = attention_weights @ values
@@ -41,10 +47,12 @@ class MultiHeadAttention(nn.Module):
         self.projection = nn.Linear(
             num_heads * head_size, NUMBER_OF_EMBEDDING_DIMENSIONS
         )
+        self.dropout = nn.Dropout(DROPOUT)
 
     def forward(self, x: Tensor) -> Tensor:
         out = torch.cat([head(x) for head in self.heads], dim=-1)
         out = self.projection(out)
+        out = self.dropout(out)
         return out
 
 
@@ -55,6 +63,7 @@ class FeedForward(nn.Module):
             nn.Linear(embedding_dim, 4 * embedding_dim),
             nn.ReLU(),
             nn.Linear(4 * embedding_dim, embedding_dim),
+            nn.Dropout(DROPOUT),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -86,11 +95,12 @@ class BigramLanguageModel(nn.Module):
             CONTEXT_SIZE, NUMBER_OF_EMBEDDING_DIMENSIONS
         )
         self.blocks = nn.Sequential(
-            Block(NUMBER_OF_EMBEDDING_DIMENSIONS, num_heads=4),
-            Block(NUMBER_OF_EMBEDDING_DIMENSIONS, num_heads=4),
-            Block(NUMBER_OF_EMBEDDING_DIMENSIONS, num_heads=4),
-            nn.LayerNorm(NUMBER_OF_EMBEDDING_DIMENSIONS),
+            *[
+                Block(NUMBER_OF_EMBEDDING_DIMENSIONS, num_heads=NUMBER_OF_HEADS)
+                for _ in range(NUMBER_OF_LAYERS)
+            ]
         )
+        self.ln_layer_norm = nn.LayerNorm(NUMBER_OF_EMBEDDING_DIMENSIONS)
         self.lm_head: nn.Linear = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, vocab_size)
 
     @override
@@ -105,6 +115,7 @@ class BigramLanguageModel(nn.Module):
         )
         x = token_embeddings + positional_embeddings
         x = self.blocks(x)
+        x = self.ln_layer_norm(x)
         logits = self.lm_head(x)
 
         if targets is not None:
