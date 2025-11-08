@@ -1,4 +1,5 @@
 import torch
+from torch.xpu import device
 
 from .data import Data
 from .model import BigramLanguageModel
@@ -6,7 +7,8 @@ from .tokenizer import Tokenizer
 from .train import train
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-context_size = 8
+# device = "cpu"
+
 batch_size = 32
 
 
@@ -25,7 +27,7 @@ def main() -> None:
         text = f.read()
 
     tokenizer = Tokenizer(text)
-    data = Data(text, tokenizer, context_size, batch_size, device)
+    data = Data(text, tokenizer, batch_size, device)
 
     model = BigramLanguageModel(tokenizer.vocab_size())
     model = model.to(device)

@@ -4,17 +4,34 @@ import torch
 import torch.nn as nn
 from torch.types import Tensor
 
+NUMBER_OF_EMBEDDING_DIMENSIONS = 32
+CONTEXT_SIZE = 8
+
 
 class BigramLanguageModel(nn.Module):
     def __init__(self, vocab_size: int):
         super().__init__()
-        self.token_embedding_table: nn.Embedding = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table: nn.Embedding = nn.Embedding(
+            vocab_size, NUMBER_OF_EMBEDDING_DIMENSIONS
+        )
+        self.positional_embedding_table: nn.Embedding = nn.Embedding(
+            CONTEXT_SIZE, NUMBER_OF_EMBEDDING_DIMENSIONS
+        )
+        self.lm_head: nn.Linear = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, vocab_size)
 
     @override
     def forward(
         self, idx: Tensor, targets: Tensor | None = None
     ) -> tuple[Tensor, Tensor | None]:
-        logits = self.token_embedding_table(idx)
+        B, T = idx.shape
+
+        token_embeddings = self.token_embedding_table(idx)
+        # positional_embeddings = self.positional_embedding_table(
+        #     torch.arange(T, device=idx.device)
+        # )
+        # embeddings = token_embeddings + positional_embeddings
+        embeddings = token_embeddings
+        logits = self.lm_head(embeddings)
 
         if targets is not None:
             # Optionally calculate loss and reduce dimension of logits

@@ -20,7 +20,6 @@ class Data:
         self,
         text: str,
         tokenizer: Tokenizer,
-        context_size: int,
         batch_size: int,
         device: str,
     ):
@@ -28,12 +27,11 @@ class Data:
         n = int(0.9 * len(tokenized))
         self.training: Tensor = tokenized[:n]
         self.validation: Tensor = tokenized[n:]
-        self.context_size: int = context_size
         self.batch_size: int = batch_size
         self.device: str = device
 
-    def training_batch(self) -> tuple[torch.Tensor, torch.Tensor]:
-        return _batch(self.training, self.context_size, self.batch_size, self.device)
+    def training_batch(self, context_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return _batch(self.training, context_size, self.batch_size, self.device)
 
-    def validation_batch(self) -> tuple[torch.Tensor, torch.Tensor]:
-        return _batch(self.validation, self.context_size, self.batch_size, self.device)
+    def validation_batch(self, context_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return _batch(self.validation, context_size, self.batch_size, self.device)

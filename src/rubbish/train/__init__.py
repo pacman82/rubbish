@@ -1,7 +1,7 @@
 import torch
 
 from rubbish.data import Data
-from rubbish.model import BigramLanguageModel
+from rubbish.model import CONTEXT_SIZE, BigramLanguageModel
 
 learning_rate = 1e-2
 max_iterations = 3000
@@ -17,7 +17,9 @@ def estimate_loss(model: BigramLanguageModel, data: Data):
         losses = torch.zeros(eval_iterations)
         for k in range(eval_iterations):
             xb, yb = (
-                data.training_batch() if split == "train" else data.validation_batch()
+                data.training_batch(CONTEXT_SIZE)
+                if split == "train"
+                else data.validation_batch(CONTEXT_SIZE)
             )
             _, loss = model(xb, yb)
             losses[k] = loss.item()
@@ -36,7 +38,7 @@ def train(model: BigramLanguageModel, data: Data):
                 f"step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
             )
 
-        xb, yb = data.training_batch()
+        xb, yb = data.training_batch(CONTEXT_SIZE)
         _, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
