@@ -21,17 +21,19 @@ class Data:
         text: str,
         tokenizer: Tokenizer,
         batch_size: int,
-        device: str,
     ):
         tokenized = torch.tensor(tokenizer.encode(text), dtype=torch.long)
         n = int(0.9 * len(tokenized))
         self.training: Tensor = tokenized[:n]
         self.validation: Tensor = tokenized[n:]
         self.batch_size: int = batch_size
-        self.device: str = device
 
-    def training_batch(self, context_size: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return _batch(self.training, context_size, self.batch_size, self.device)
+    def training_batch(
+        self, context_size: int, device: str
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return _batch(self.training, context_size, self.batch_size, device)
 
-    def validation_batch(self, context_size: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return _batch(self.validation, context_size, self.batch_size, self.device)
+    def validation_batch(
+        self, context_size: int, device: str
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return _batch(self.validation, context_size, self.batch_size, device)
