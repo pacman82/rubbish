@@ -30,6 +30,8 @@ def main() -> None:
     model = BigramLanguageModel(tokenizer.vocab_size())
     model = model.to(device)
 
+    print(f"Number of model parameters {sum(p.numel() for p in model.parameters())}")
+
     print_generate_text(model, tokenizer)
 
     train(model, data, device)
