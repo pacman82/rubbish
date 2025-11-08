@@ -34,6 +34,15 @@ class Head(nn.Module):
         return out
 
 
+class MultiHeadAttention(nn.Module):
+    def __init__(self, num_heads: int, head_size: int) -> None:
+        super().__init__()
+        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
+
+    def forward(self, x: Tensor) -> Tensor:
+        return torch.cat([head(x) for head in self.heads], dim=-1)
+
+
 class BigramLanguageModel(nn.Module):
     def __init__(self, vocab_size: int):
         super().__init__()
@@ -43,7 +52,9 @@ class BigramLanguageModel(nn.Module):
         self.positional_embedding_table: nn.Embedding = nn.Embedding(
             CONTEXT_SIZE, NUMBER_OF_EMBEDDING_DIMENSIONS
         )
-        self.self_attention_head = Head(head_size=NUMBER_OF_EMBEDDING_DIMENSIONS)
+        self.self_attention_head = MultiHeadAttention(
+            4, head_size=NUMBER_OF_EMBEDDING_DIMENSIONS // 4
+        )
         self.lm_head: nn.Linear = nn.Linear(NUMBER_OF_EMBEDDING_DIMENSIONS, vocab_size)
 
     @override
