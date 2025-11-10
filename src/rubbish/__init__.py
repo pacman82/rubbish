@@ -3,7 +3,7 @@ import torch
 from .data import Data
 from .model import BigramLanguageModel
 from .tokenizer import Tokenizer
-from .train import train
+from .train import estimate_loss, train
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -16,6 +16,23 @@ def print_generate_text(
     context = torch.zeros((1, 1), dtype=torch.long, device=device)
     generated_batch = model.generate(idx=context, max_new_tokens=max_new_tokens)
     print(tokenizer.decode(generated_batch[0].tolist()))
+
+
+class Evaluator:
+    def __init__(
+        self, model: BigramLanguageModel, data: Data, device: str, tokenizer: Tokenizer
+    ):
+        self.data = data
+        self.device = device
+        self.tokenizer = tokenizer
+
+    @torch.no_grad()
+    def eval(self, model: BigramLanguageModel, step: int):
+        losses = estimate_loss(model, self.data, self.device)
+        print_generate_text(model, self.tokenizer, max_new_tokens=512)
+        print(
+            f"step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+        )
 
 
 def main() -> None:
@@ -34,8 +51,8 @@ def main() -> None:
 
     print(f"Number of model parameters {sum(p.numel() for p in model.parameters())}")
 
-    print_generate_text(model, tokenizer)
+    evaluator = Evaluator(model, data, device, tokenizer)
 
-    train(model, data, device)
+    train(model, data, device, eval=evaluator.eval)
 
     print_generate_text(model, tokenizer, max_new_tokens=4096)

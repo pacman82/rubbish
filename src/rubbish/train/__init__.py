@@ -1,4 +1,7 @@
+from typing import Callable
+
 import torch
+from torch.optim import AdamW
 
 from rubbish.data import Data
 from rubbish.model import CONTEXT_SIZE, BigramLanguageModel
@@ -12,7 +15,6 @@ eval_interval = 500
 @torch.no_grad()
 def estimate_loss(model: BigramLanguageModel, data: Data, device: str):
     out = {}
-    model.eval()
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iterations)
         for k in range(eval_iterations):
@@ -24,22 +26,32 @@ def estimate_loss(model: BigramLanguageModel, data: Data, device: str):
             _, loss = model(xb, yb)
             losses[k] = loss.item()
         out[split] = losses.mean()
-    model.train()
     return out
 
 
-def train(model: BigramLanguageModel, data: Data, device: str):
+def train(
+    model: BigramLanguageModel,
+    data: Data,
+    device: str,
+    eval: Callable[[BigramLanguageModel, int], None] | None = None,
+):
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
     for step in range(max_iterations):
-        if step % eval_interval == 0:
-            losses = estimate_loss(model, data, device)
-            print(
-                f"step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
-            )
+        if step % eval_interval == 0 and eval is not None:
+            model.eval()
+            eval(model, step)
+            model.train()
 
-        xb, yb = data.training_batch(CONTEXT_SIZE, device=device)
-        _, loss = model(xb, yb)
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
+        train_step(model, optimizer, data, device)
+
+
+def train_step(
+    model: BigramLanguageModel, optimizer: AdamW, data: Data, device: str
+) -> float:
+    xb, yb = data.training_batch(CONTEXT_SIZE, device=device)
+    _, loss = model(xb, yb)
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    optimizer.step()
+    return loss.item()
