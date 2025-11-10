@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Callable
 
 import torch
@@ -7,7 +8,7 @@ from rubbish.data import Data
 from rubbish.model import CONTEXT_SIZE, BigramLanguageModel
 
 learning_rate = 3e-4
-max_iterations = 50001
+max_iterations = 5000
 eval_iterations = 200
 eval_interval = 500
 
@@ -36,6 +37,9 @@ def train(
     eval: Callable[[BigramLanguageModel, int], None] | None = None,
 ):
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    if Path("optimizer.pt").is_file():
+        model.load_state_dict(torch.load("model.pt"))
+        optimizer.load_state_dict(torch.load("optimizer.pt"))
 
     for step in range(max_iterations):
         if step % eval_interval == 0 and eval is not None:
@@ -43,7 +47,18 @@ def train(
             eval(model, step)
             model.train()
 
+            torch.save(model.state_dict(), "model.pt")
+            torch.save(optimizer.state_dict(), "optimizer.pt")
+
         train_step(model, optimizer, data, device)
+
+    if eval is not None:
+        model.eval()
+        eval(model, max_iterations)
+        model.train()
+
+    torch.save(model.state_dict(), "model.pt")
+    torch.save(optimizer.state_dict(), "optimizer.pt")
 
 
 def train_step(
