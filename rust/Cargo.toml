@@ -1,0 +1,12 @@
+[package]
+name = "rubbish"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+candle-core = "0.9.1"
+
+[features]
+default = []
+cuda = ["candle-core/cuda"]
