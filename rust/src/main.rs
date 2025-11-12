@@ -1,16 +1,17 @@
 mod data;
+mod device;
 mod tokenizer;
 
 use std::fs;
 
 use anyhow::Context;
-use candle_core::{Device, Tensor};
+
+use crate::device::choose_device;
 
 use self::{data::Data, tokenizer::Tokenizer};
 
 fn main() -> anyhow::Result<()> {
-    let device = Device::cuda_if_available(0)?;
-    eprintln!("Using device: {device:?}");
+    let device = choose_device();
 
     let text = fs::read_to_string("../input.txt").context("Error opening input text.")?;
     let tokenizer = Tokenizer::from_text(&text);
