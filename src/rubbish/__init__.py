@@ -36,7 +36,7 @@ class Evaluator:
 
 
 def main() -> None:
-    torch.manual_seed(1337)
+    # torch.manual_seed(1337)
 
     print(f"Using device: {device}")
 
