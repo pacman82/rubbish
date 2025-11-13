@@ -7,7 +7,7 @@ from .train import estimate_loss, train
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-batch_size = 64
+batch_size = 128
 
 
 def print_generate_text(
