@@ -91,7 +91,7 @@ fn sample_batch(
     for _ in 0..batch_size {
         let start_index = rng.next_batch_start_index(up);
         context_batch_buffer.push(data.narrow(0, start_index, context_size).unwrap());
-        target_batch_buffer.push(data.narrow(0, start_index + context_size, 1).unwrap());
+        target_batch_buffer.push(data.narrow(0, start_index + 1, context_size).unwrap());
     }
     let context = Tensor::stack(context_batch_buffer.as_slice(), 0).unwrap();
     let target = Tensor::stack(target_batch_buffer.as_slice(), 0).unwrap();
@@ -103,8 +103,8 @@ pub struct SampleBatch {
     /// A tensor of shape [batch_size, context_size]. Each line in the batch dimension contains
     /// context_size contiguous tokens from the training data.
     pub context: Tensor,
-    /// A tensor of shape [batch_size, 1]. Each line in the batch dimension contains the token
-    /// immediately following the context tokens, of the batch with the same index of context.
+    /// A tensor of shape [batch_size, context_size]. Each line in the batch dimension contains the
+    /// token immediately following the context tokens, of the batch with the same index of context.
     pub target: Tensor,
 }
 
@@ -142,7 +142,7 @@ mod tests {
         let mut data = BatchSampler::from_tokenized((0..10).collect(), &device);
         let batch = data.sample_training_batch(batch_size, context_size, &mut rng);
         assert_eq!(batch.context.dims(), &[3, 2]);
-        assert_eq!(batch.target.dims(), &[3, 1]);
+        assert_eq!(batch.target.dims(), &[3, 2]);
 
         assert_eq!(
             vec![vec![0, 1], vec![1, 2], vec![2, 3]],
@@ -150,7 +150,7 @@ mod tests {
         );
 
         assert_eq!(
-            vec![vec![2], vec![3], vec![4]],
+            vec![vec![1, 2], vec![2, 3], vec![3, 4]],
             batch.target.to_vec2::<u32>().unwrap()
         );
     }
@@ -165,7 +165,7 @@ mod tests {
         let mut data = BatchSampler::from_tokenized((0..30).collect(), &device);
         let batch = data.sample_validation_batch(batch_size, context_size, &mut rng);
         assert_eq!(batch.context.dims(), &[3, 2]);
-        assert_eq!(batch.target.dims(), &[3, 1]);
+        assert_eq!(batch.target.dims(), &[3, 2]);
 
         assert_eq!(
             vec![vec![27, 28], vec![27, 28], vec![27, 28]],
@@ -173,7 +173,7 @@ mod tests {
         );
 
         assert_eq!(
-            vec![vec![29], vec![29], vec![29]],
+            vec![vec![28, 29], vec![28, 29], vec![28, 29]],
             batch.target.to_vec2::<u32>().unwrap()
         );
     }

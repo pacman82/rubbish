@@ -43,6 +43,10 @@ impl Tokenizer {
             .map(|&i| self.int_to_char[i as usize])
             .collect()
     }
+
+    pub fn vocab_size(&self) -> usize {
+        self.int_to_char.len()
+    }
 }
 
 #[cfg(test)]
