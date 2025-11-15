@@ -7,7 +7,7 @@ from torch.optim import AdamW
 from rubbish.data import Data
 from rubbish.model import CONTEXT_SIZE, BigramLanguageModel
 
-learning_rate = 3e-5
+learning_rate = 1e-5
 max_iterations = 50000
 eval_iterations = 1600
 eval_interval = 4000
