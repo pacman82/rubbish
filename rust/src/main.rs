@@ -9,12 +9,12 @@ use std::fs;
 use anyhow::Context;
 use candle_core::Tensor;
 use candle_nn::{ModuleT, loss::cross_entropy};
+use candle_transformers::generation::{LogitsProcessor, Sampling};
 use rand::rng;
 
-use self::{
-    data::BatchSampler, device::choose_device, generate::generate, model::Model,
-    tokenizer::Tokenizer,
-};
+use crate::generate::GenerateIter;
+
+use self::{data::BatchSampler, device::choose_device, model::Model, tokenizer::Tokenizer};
 
 const BATCH_SIZE: usize = 4;
 const CONTEXT_SIZE: usize = 8;
@@ -71,17 +71,21 @@ fn main() -> anyhow::Result<()> {
         println!("context: {context}, target: {target}");
     }
 
-    let model = Model::new(&device, tokenizer.vocab_size());
+    let model = Model::new(device.clone(), tokenizer.vocab_size());
     let logits = model.forward_t(&training_batch.context, false).unwrap();
     let loss = loss(&logits, &training_batch.target);
     println!("{:?}", logits.shape());
     println!("loss: {loss}");
 
-    let mut text = vec![0];
-    generate(&model, &mut text, &device, 100);
+    let sampler = LogitsProcessor::from_sampling(42, Sampling::All { temperature: 1.0 });
+    let prompt = tokenizer.encode("\n");
+    let generator =
+        GenerateIter::new(&model, sampler, prompt).map(|token| tokenizer.decode(&[token]));
 
-    let generated = tokenizer.decode(&text);
-    println!("Generated text: {generated}");
+    println!("Generated text:");
+    for token in generator.take(100) {
+        print!("{token}");
+    }
 
     Ok(())
 }
