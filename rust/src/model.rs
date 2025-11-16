@@ -24,6 +24,14 @@ impl Model {
     pub fn all_vars(&self) -> Vec<Var> {
         self.var_map.all_vars()
     }
+
+    pub fn number_of_parameters(&self) -> usize {
+        self.var_map
+            .all_vars()
+            .iter()
+            .map(|var| var.elem_count())
+            .sum::<usize>()
+    }
 }
 
 impl ModuleT for Model {
