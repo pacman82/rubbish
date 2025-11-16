@@ -7,8 +7,8 @@ mod tokenizer;
 use std::fs;
 
 use anyhow::Context;
-use candle_core::Tensor;
-use candle_nn::{ModuleT, loss::cross_entropy};
+use candle_core::{DType, Tensor};
+use candle_nn::{AdamW, ModuleT, Optimizer, loss::cross_entropy};
 use candle_transformers::generation::{LogitsProcessor, Sampling};
 use rand::rng;
 
@@ -16,7 +16,7 @@ use crate::generate::GenerateIter;
 
 use self::{data::BatchSampler, device::choose_device, model::Model, tokenizer::Tokenizer};
 
-const BATCH_SIZE: usize = 4;
+const BATCH_SIZE: usize = 32;
 const CONTEXT_SIZE: usize = 8;
 
 fn main() -> anyhow::Result<()> {
@@ -31,49 +31,10 @@ fn main() -> anyhow::Result<()> {
     // Sample a training and a validation batch and print their decoded versions
     let rng = &mut rng();
     let training_batch = batch_sampler.sample_training_batch(BATCH_SIZE, CONTEXT_SIZE, rng);
-    let validation_batch = batch_sampler.sample_validation_batch(BATCH_SIZE, CONTEXT_SIZE, rng);
-
-    println!("Training batch:");
-    for batch_index in 0..BATCH_SIZE {
-        let data = training_batch
-            .context
-            .get(batch_index)
-            .unwrap()
-            .to_vec1()
-            .unwrap();
-        let context = tokenizer.decode(&data);
-        let data = training_batch
-            .target
-            .get(batch_index)
-            .unwrap()
-            .to_vec1()
-            .unwrap();
-        let target = tokenizer.decode(&data);
-        println!("context: {context}, target: {target}");
-    }
-
-    println!("Validation batch:");
-    for batch_index in 0..BATCH_SIZE {
-        let data = validation_batch
-            .context
-            .get(batch_index)
-            .unwrap()
-            .to_vec1()
-            .unwrap();
-        let context = tokenizer.decode(&data);
-        let data = validation_batch
-            .target
-            .get(batch_index)
-            .unwrap()
-            .to_vec1()
-            .unwrap();
-        let target = tokenizer.decode(&data);
-        println!("context: {context}, target: {target}");
-    }
 
     let model = Model::new(device.clone(), tokenizer.vocab_size());
     let logits = model.forward_t(&training_batch.context, false).unwrap();
-    let loss = loss(&logits, &training_batch.target);
+    let loss = calculate_loss(&logits, &training_batch.target);
     println!("{:?}", logits.shape());
     println!("loss: {loss}");
 
@@ -87,14 +48,33 @@ fn main() -> anyhow::Result<()> {
         print!("{token}");
     }
 
+    let learning_rate = 1e-3;
+    let trainable_params = model.all_vars();
+    let num_parameters = trainable_params
+        .iter()
+        .map(|var| var.elem_count())
+        .sum::<usize>();
+    trainable_params.first().unwrap().elem_count();
+    eprintln!("Number of trainable parameters: {}", num_parameters);
+    let mut optimizer = AdamW::new_lr(trainable_params, learning_rate).unwrap();
+
+    for step in 1..=1000 {
+        let batch = batch_sampler.sample_training_batch(BATCH_SIZE, CONTEXT_SIZE, rng);
+        let logits = model.forward_t(&batch.context, true).unwrap();
+        let loss = calculate_loss(&logits, &batch.target);
+        if step % 100 == 0 {
+            println!("step {step}, loss: {}", loss.to_scalar::<f32>().unwrap());
+        }
+        optimizer.backward_step(&loss).unwrap();
+    }
     Ok(())
 }
 
-fn loss(logits: &Tensor, targets: &Tensor) -> f32 {
+fn calculate_loss(logits: &Tensor, targets: &Tensor) -> Tensor {
     // B, T, C => B * T, C
     let (b, t, c) = logits.dims3().unwrap();
     let logits = logits.reshape((b * t, c)).unwrap();
     let targets = targets.reshape((b * t,)).unwrap();
     let loss = cross_entropy(&logits, &targets).unwrap();
-    loss.to_scalar().unwrap()
+    loss
 }

@@ -1,19 +1,28 @@
-use candle_core::{Device, Tensor};
+use candle_core::{Device, Tensor, Var};
 use candle_nn::{Embedding, ModuleT, VarBuilder, VarMap};
 
 pub struct Model {
     embedding: Embedding,
     device: Device,
+    var_map: VarMap,
 }
 
 impl Model {
     pub fn new(device: Device, vocab_size: usize) -> Self {
         let embedding_dimension = vocab_size;
-        let vm = VarMap::new();
-        let vb = VarBuilder::from_varmap(&vm, candle_core::DType::F32, &device);
+        let var_map = VarMap::new();
+        let vb = VarBuilder::from_varmap(&var_map, candle_core::DType::F32, &device);
 
         let embedding = candle_nn::embedding(vocab_size, embedding_dimension, vb).unwrap();
-        Self { embedding, device }
+        Self {
+            embedding,
+            device,
+            var_map,
+        }
+    }
+
+    pub fn all_vars(&self) -> Vec<Var> {
+        self.var_map.all_vars()
     }
 }
 
