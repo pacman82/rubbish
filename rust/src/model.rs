@@ -3,7 +3,6 @@ use candle_nn::{Embedding, ModuleT, VarBuilder, VarMap};
 
 pub struct Model {
     embedding: Embedding,
-    device: Device,
     var_map: VarMap,
 }
 
@@ -14,11 +13,7 @@ impl Model {
         let vb = VarBuilder::from_varmap(&var_map, candle_core::DType::F32, &device);
 
         let embedding = candle_nn::embedding(vocab_size, embedding_dimension, vb).unwrap();
-        Self {
-            embedding,
-            device,
-            var_map,
-        }
+        Self { embedding, var_map }
     }
 
     pub fn all_vars(&self) -> Vec<Var> {
@@ -50,7 +45,7 @@ pub trait DeviceAffine {
 
 impl DeviceAffine for Model {
     fn device(&self) -> Device {
-        self.device.clone()
+        self.embedding.embeddings().device().clone()
     }
 }
 

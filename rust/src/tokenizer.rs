@@ -37,11 +37,16 @@ impl Tokenizer {
             .collect()
     }
 
+    #[allow(unused)]
     pub fn decode(&self, tokens: &[u32]) -> String {
         tokens
             .iter()
             .map(|&i| self.int_to_char[i as usize])
             .collect()
+    }
+
+    pub fn decode_single(&self, token: u32) -> char {
+        self.int_to_char[token as usize]
     }
 
     pub fn vocab_size(&self) -> usize {
@@ -55,7 +60,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hello_world() {
+    fn hello_world_tokenization_roundtrip() {
         let tokenizer = Tokenizer::from_text("Hello, World!");
 
         let roundtrip = |input: &str| {
@@ -68,5 +73,16 @@ mod tests {
         assert_eq!("Hello", roundtrip("Hello"));
         assert_eq!("World", roundtrip("World"));
         assert_eq!("Hello!", roundtrip("Hello!"));
+    }
+
+    #[test]
+    fn tokenize_single_characters() {
+        let tokenizer = Tokenizer::from_text("abc \n");
+
+        assert_eq!('\n', tokenizer.decode_single(0));
+        assert_eq!(' ', tokenizer.decode_single(1));
+        assert_eq!('a', tokenizer.decode_single(2));
+        assert_eq!('b', tokenizer.decode_single(3));
+        assert_eq!('c', tokenizer.decode_single(4));
     }
 }

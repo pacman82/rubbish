@@ -5,16 +5,17 @@ use rand::{
 };
 
 /// Samples training and validation batches
-pub struct BatchSampler {
+pub struct Data<R> {
     training_data: Tensor,
     validation_data: Tensor,
     // We reuse these buffers for composing batches to avoid repeated allocations
     context_batch_buffer: Vec<Tensor>,
     target_batch_buffer: Vec<Tensor>,
+    rng: R,
 }
 
-impl BatchSampler {
-    pub fn from_tokenized(tokenized: Vec<u32>, device: &Device) -> Self {
+impl<R> Data<R> {
+    pub fn new(tokenized: Vec<u32>, device: &Device, rng: R) -> Self {
         let num_tokens = tokenized.len();
         eprintln!("Number of tokens in input data: {num_tokens}");
         let tokenized = Tensor::from_vec(tokenized, num_tokens, device).unwrap();
@@ -29,41 +30,43 @@ impl BatchSampler {
             .unwrap();
         eprintln!("Number of training tokens: {num_training_tokens}");
         eprintln!("Number of validation tokens: {num_validation_tokens}");
-        BatchSampler {
+        Data {
             training_data,
             validation_data,
             context_batch_buffer: Vec::new(),
             target_batch_buffer: Vec::new(),
+            rng,
         }
     }
+}
 
-    pub fn sample_training_batch(
-        &mut self,
-        batch_size: usize,
-        context_size: usize,
-        rng: &mut impl BatchStartIndices,
-    ) -> SampleBatch {
+/// Sampling of training and validation batches
+pub trait BatchSampler {
+    fn sample_training_batch(&mut self, batch_size: usize, context_size: usize) -> SampleBatch;
+    fn sample_validation_batch(&mut self, batch_size: usize, context_size: usize) -> SampleBatch;
+}
+
+impl<R> BatchSampler for Data<R>
+where
+    R: BatchStartIndices,
+{
+    fn sample_training_batch(&mut self, batch_size: usize, context_size: usize) -> SampleBatch {
         sample_batch(
             &self.training_data,
             batch_size,
             context_size,
-            rng,
+            &mut self.rng,
             &mut self.context_batch_buffer,
             &mut self.target_batch_buffer,
         )
     }
 
-    pub fn sample_validation_batch(
-        &mut self,
-        batch_size: usize,
-        context_size: usize,
-        rng: &mut impl BatchStartIndices,
-    ) -> SampleBatch {
+    fn sample_validation_batch(&mut self, batch_size: usize, context_size: usize) -> SampleBatch {
         sample_batch(
             &self.validation_data,
             batch_size,
             context_size,
-            rng,
+            &mut self.rng,
             &mut self.context_batch_buffer,
             &mut self.target_batch_buffer,
         )
@@ -137,10 +140,10 @@ mod tests {
         let device = choose_device();
         let batch_size = 3;
         let context_size = 2;
-        let mut rng = CountingStartIndices::new();
+        let rng = CountingStartIndices::new();
 
-        let mut data = BatchSampler::from_tokenized((0..10).collect(), &device);
-        let batch = data.sample_training_batch(batch_size, context_size, &mut rng);
+        let mut data = Data::new((0..10).collect(), &device, rng);
+        let batch = data.sample_training_batch(batch_size, context_size);
         assert_eq!(batch.context.dims(), &[3, 2]);
         assert_eq!(batch.target.dims(), &[3, 2]);
 
@@ -160,10 +163,10 @@ mod tests {
         let device = choose_device();
         let batch_size = 3;
         let context_size = 2;
-        let mut rng = CountingStartIndices::new();
+        let rng = CountingStartIndices::new();
 
-        let mut data = BatchSampler::from_tokenized((0..30).collect(), &device);
-        let batch = data.sample_validation_batch(batch_size, context_size, &mut rng);
+        let mut data = Data::new((0..30).collect(), &device, rng);
+        let batch = data.sample_validation_batch(batch_size, context_size);
         assert_eq!(batch.context.dims(), &[3, 2]);
         assert_eq!(batch.target.dims(), &[3, 2]);
 

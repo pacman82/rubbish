@@ -8,17 +8,18 @@ mod train;
 use std::fs;
 
 use anyhow::Context;
-use candle_nn::{AdamW, ModuleT, Optimizer};
 use candle_transformers::generation::{LogitsProcessor, Sampling};
 use rand::rng;
 
+use crate::train::Training;
+
 use self::{
-    data::BatchSampler, device::choose_device, generate::GenerateIter, model::Model,
-    tokenizer::Tokenizer, train::calculate_loss,
+    data::Data, device::choose_device, generate::GenerateIter, model::Model, tokenizer::Tokenizer,
 };
 
 const BATCH_SIZE: usize = 32;
 const CONTEXT_SIZE: usize = 8;
+const LEARNING_RATE: f64 = 1e-3;
 
 fn main() -> anyhow::Result<()> {
     let device = choose_device();
@@ -27,10 +28,7 @@ fn main() -> anyhow::Result<()> {
     let tokenizer = Tokenizer::from_text(&text);
     let tokenized = tokenizer.encode(&text);
 
-    let mut batch_sampler = BatchSampler::from_tokenized(tokenized, &device);
-
-    // Sample a training and a validation batch and print their decoded versions
-    let rng = &mut rng();
+    let batch_sampler = Data::new(tokenized, &device, rng());
 
     let model = Model::new(device.clone(), tokenizer.vocab_size());
     eprintln!(
@@ -38,28 +36,22 @@ fn main() -> anyhow::Result<()> {
         model.number_of_parameters()
     );
 
-    let learning_rate = 1e-3;
-    let trainable_params = model.all_vars();
-    let mut optimizer = AdamW::new_lr(trainable_params, learning_rate).unwrap();
-
-    for step in 1..=1_000 {
-        let batch = batch_sampler.sample_training_batch(BATCH_SIZE, CONTEXT_SIZE, rng);
-        let logits = model.forward_t(&batch.context, true).unwrap();
-        let loss = calculate_loss(&logits, &batch.target);
-        if step % 100 == 0 {
-            println!("step {step}, loss: {}", loss.to_scalar::<f32>().unwrap());
-        }
-        optimizer.backward_step(&loss).unwrap();
+    let mut training = Training::new(batch_sampler, &model);
+    for _step in 1..=1_000 {
+        training.step();
     }
 
-    println!("Generated text:");
+    print_generated_text(&model, &tokenizer, 100);
+
+    Ok(())
+}
+
+fn print_generated_text(model: &Model, tokenizer: &Tokenizer, num_tokens: usize) {
     let sampler = LogitsProcessor::from_sampling(42, Sampling::All { temperature: 1.0 });
     let prompt = tokenizer.encode("\n");
     let generator =
-        GenerateIter::new(&model, sampler, prompt).map(|token| tokenizer.decode(&[token]));
-    for token in generator.take(100) {
+        GenerateIter::new(model, sampler, prompt).map(|token| tokenizer.decode_single(token));
+    for token in generator.take(num_tokens) {
         print!("{token}");
     }
-
-    Ok(())
 }
