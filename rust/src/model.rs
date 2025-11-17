@@ -1,6 +1,8 @@
 use candle_core::{Device, Tensor, Var};
 use candle_nn::{Embedding, ModuleT, VarBuilder, VarMap};
 
+use crate::train::Trainable;
+
 pub struct Model {
     embedding: Embedding,
     var_map: VarMap,
@@ -14,10 +16,6 @@ impl Model {
 
         let embedding = candle_nn::embedding(vocab_size, embedding_dimension, vb).unwrap();
         Self { embedding, var_map }
-    }
-
-    pub fn all_vars(&self) -> Vec<Var> {
-        self.var_map.all_vars()
     }
 
     pub fn number_of_parameters(&self) -> usize {
@@ -81,6 +79,12 @@ where
         // For simplicity, we will just return the last embeddings as logits
         // In a real model, you would have a linear layer here to project to vocab size
         last_logits
+    }
+}
+
+impl Trainable for Model {
+    fn all_vars(&self) -> Vec<Var> {
+        self.var_map.all_vars()
     }
 }
 
