@@ -44,6 +44,17 @@ impl<R> Data<R> {
 pub trait BatchSampler {
     fn sample_training_batch(&mut self, batch_size: usize, context_size: usize) -> SampleBatch;
     fn sample_validation_batch(&mut self, batch_size: usize, context_size: usize) -> SampleBatch;
+    fn sample_batch(
+        &mut self,
+        source: BatchSource,
+        batch_size: usize,
+        context_size: usize,
+    ) -> SampleBatch {
+        match source {
+            BatchSource::Training => self.sample_training_batch(batch_size, context_size),
+            BatchSource::Validation => self.sample_validation_batch(batch_size, context_size),
+        }
+    }
 }
 
 impl<R> BatchSampler for Data<R>
@@ -127,6 +138,12 @@ where
     fn next_batch_start_index(&mut self, up: usize) -> usize {
         Uniform::new(0, up).unwrap().sample(self)
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum BatchSource {
+    Training,
+    Validation,
 }
 
 #[cfg(test)]

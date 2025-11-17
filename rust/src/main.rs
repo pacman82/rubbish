@@ -40,6 +40,7 @@ fn main() -> anyhow::Result<()> {
     for _step in 1..=1_000 {
         training.step();
     }
+    training.estimate_loss();
 
     print_generated_text(&model, &tokenizer, 100);
 
