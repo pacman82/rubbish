@@ -1,21 +1,28 @@
 use candle_core::{Device, Tensor, Var};
-use candle_nn::{Embedding, ModuleT, VarBuilder, VarMap};
+use candle_nn::{Embedding, Linear, ModuleT, VarBuilder, VarMap};
 
 use crate::train::Trainable;
 
+const EMBEDDING_DIMENSION: usize = 32;
+
 pub struct Model {
+    linear: Linear,
     embedding: Embedding,
     var_map: VarMap,
 }
 
 impl Model {
     pub fn new(device: Device, vocab_size: usize) -> Self {
-        let embedding_dimension = vocab_size;
         let var_map = VarMap::new();
         let vb = VarBuilder::from_varmap(&var_map, candle_core::DType::F32, &device);
-
-        let embedding = candle_nn::embedding(vocab_size, embedding_dimension, vb).unwrap();
-        Self { embedding, var_map }
+        let embedding =
+            candle_nn::embedding(vocab_size, EMBEDDING_DIMENSION, vb.pp("embedding")).unwrap();
+        let linear = candle_nn::linear(EMBEDDING_DIMENSION, vocab_size, vb.pp("linear")).unwrap();
+        Self {
+            embedding,
+            linear,
+            var_map,
+        }
     }
 
     pub fn number_of_parameters(&self) -> usize {
@@ -31,7 +38,10 @@ impl ModuleT for Model {
     fn forward_t(&self, xs: &Tensor, train: bool) -> candle_core::Result<Tensor> {
         // xs in batch, time (context), channel (vocab size)
         // returns batch, time, embedding_dimension
-        self.embedding.forward_t(xs, train)
+        let embeddings = self.embedding.forward_t(xs, train).unwrap();
+        // We use a linear layer to map the channel back to the vocabulary size.
+        let logits = self.linear.forward_t(&embeddings, train).unwrap();
+        Ok(logits)
     }
 }
 
