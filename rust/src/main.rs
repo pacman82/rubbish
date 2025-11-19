@@ -37,7 +37,7 @@ fn main() -> anyhow::Result<()> {
     );
 
     let mut training = Training::new(batch_sampler, &model);
-    for _step in 1..=10_000 {
+    for _step in 1..=1_000 {
         training.step();
     }
     training.estimate_loss();

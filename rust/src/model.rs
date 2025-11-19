@@ -1,13 +1,17 @@
 use candle_core::{Device, Tensor, Var};
 use candle_nn::{Embedding, Linear, ModuleT, VarBuilder, VarMap};
 
-use crate::train::Trainable;
+use crate::{CONTEXT_SIZE, train::Trainable};
 
 const EMBEDDING_DIMENSION: usize = 32;
 
 pub struct Model {
-    linear: Linear,
-    embedding: Embedding,
+    /// Maps token ids to embedding vector
+    token_embedding: Embedding,
+    /// Maps token position to embedding vector
+    positional_embedding: Embedding,
+    /// Maps back to vocab size
+    lm_head: Linear,
     var_map: VarMap,
 }
 
@@ -15,12 +19,23 @@ impl Model {
     pub fn new(device: Device, vocab_size: usize) -> Self {
         let var_map = VarMap::new();
         let vb = VarBuilder::from_varmap(&var_map, candle_core::DType::F32, &device);
-        let embedding =
-            candle_nn::embedding(vocab_size, EMBEDDING_DIMENSION, vb.pp("embedding")).unwrap();
-        let linear = candle_nn::linear(EMBEDDING_DIMENSION, vocab_size, vb.pp("linear")).unwrap();
+        let token_embedding = candle_nn::embedding(
+            vocab_size,
+            EMBEDDING_DIMENSION,
+            vb.pp("token_embedding_table"),
+        )
+        .unwrap();
+        let positional_embedding = candle_nn::embedding(
+            CONTEXT_SIZE,
+            EMBEDDING_DIMENSION,
+            vb.pp("positional_embedding_table"),
+        )
+        .unwrap();
+        let lm_head = candle_nn::linear(EMBEDDING_DIMENSION, vocab_size, vb.pp("lm_head")).unwrap();
         Self {
-            embedding,
-            linear,
+            token_embedding,
+            positional_embedding,
+            lm_head,
             var_map,
         }
     }
@@ -36,11 +51,19 @@ impl Model {
 
 impl ModuleT for Model {
     fn forward_t(&self, xs: &Tensor, train: bool) -> candle_core::Result<Tensor> {
-        // xs in batch, time (context), channel (vocab size)
+        // xs in batch, time (context) and its elements range from 0 to vocab size
+        let (_b, t) = xs.dims2().unwrap();
         // returns batch, time, embedding_dimension
-        let embeddings = self.embedding.forward_t(xs, train).unwrap();
+        let token_embeddings = self.token_embedding.forward_t(xs, train).unwrap();
+        // Position would be a 1 dimensional vector in the time dimension
+        // let position = Tensor::arange::<u32>(0, t as u32, xs.device()).unwrap();
+        // let positional_embeddings = self
+        //     .positional_embedding
+        //     .forward_t(&position, train)
+        //     .unwrap();
+        // let x = (token_embeddings + positional_embeddings).unwrap();
         // We use a linear layer to map the channel back to the vocabulary size.
-        let logits = self.linear.forward_t(&embeddings, train).unwrap();
+        let logits = self.lm_head.forward_t(&token_embeddings, train).unwrap();
         Ok(logits)
     }
 }
@@ -53,7 +76,7 @@ pub trait DeviceAffine {
 
 impl DeviceAffine for Model {
     fn device(&self) -> Device {
-        self.embedding.embeddings().device().clone()
+        self.token_embedding.embeddings().device().clone()
     }
 }
 
@@ -65,12 +88,17 @@ pub trait PredictLogits: DeviceAffine {
     /// Use the model to predict the logits for the next token for each batch in a sequence of
     /// inputs.
     ///
-    /// * `xs`: Input tensor of shape (batch_size, sequence_length, vocab_size)
+    /// * `xs`: Input tensor of shape (batch_size, sequence_length). The sequence length must not
+    ///   exceed the context size of the model.
     ///
     /// # Returns
     ///
     /// Tensor of shape (batch_size, vocab_size) representing the logits for the next token.
     fn predict_logits(&self, xs: &Tensor) -> Tensor;
+
+    /// Context size of the model. Used to limit the `sequence_length` passed into
+    /// [`PredictLogits::predict_logits`]
+    fn context_size(&self) -> usize;
 }
 
 impl<T> PredictLogits for T
@@ -89,6 +117,10 @@ where
         // For simplicity, we will just return the last embeddings as logits
         // In a real model, you would have a linear layer here to project to vocab size
         last_logits
+    }
+
+    fn context_size(&self) -> usize {
+        CONTEXT_SIZE
     }
 }
 

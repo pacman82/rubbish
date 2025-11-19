@@ -29,11 +29,20 @@ where
     type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let context_size = self.model.context_size();
         let input_tensor =
             Tensor::from_slice(&self.input_ids, &[1, self.input_ids.len()], &self.device).unwrap();
         let logits = self.model.predict_logits(&input_tensor);
         let next = self.sampler.sample_single(&logits);
-        self.input_ids.push(next);
+        if self.input_ids.len() == context_size {
+            // Input ids already have the length of context size, so we drop the first tokens from
+            // the start and add the new token at the end.
+            self.input_ids.rotate_left(1);
+            *self.input_ids.last_mut().unwrap() = next;
+        } else {
+            // The input ids have not reached the length of the context size yet, so we just append.
+            self.input_ids.push(next)
+        }
         Some(next)
     }
 }
@@ -51,10 +60,16 @@ impl Sampler for LogitsProcessor {
 
 #[cfg(test)]
 mod tests {
+    use std::{mem::replace, sync::Mutex};
+
     use candle_core::Tensor;
     use candle_transformers::generation::{LogitsProcessor, Sampling};
 
-    use crate::{device::choose_device, generate::Sampler};
+    use crate::{
+        device::choose_device,
+        generate::{GenerateIter, Sampler},
+        model::{DeviceAffine, PredictLogits},
+    };
 
     #[test]
     fn sampler() {
@@ -69,5 +84,86 @@ mod tests {
 
         // Then we should get sample the index 1 most of the time. We fix the seed here in the test.
         assert_eq!(sampled, 1);
+    }
+
+    #[test]
+    fn models_sees_only_inputs_which_are_smaller_or_equal_to_context_size() {
+        struct ModelSpy {
+            predict_logits_record: Mutex<Vec<Tensor>>,
+        }
+
+        impl ModelSpy {
+            pub fn new() -> Self {
+                Self {
+                    predict_logits_record: Mutex::new(Vec::new()),
+                }
+            }
+
+            pub fn take_recorded_predict_logits(&self) -> Vec<Tensor> {
+                replace(&mut *self.predict_logits_record.lock().unwrap(), Vec::new())
+            }
+        }
+
+        impl DeviceAffine for ModelSpy {
+            fn device(&self) -> candle_core::Device {
+                choose_device()
+            }
+        }
+
+        impl PredictLogits for ModelSpy {
+            fn predict_logits(&self, xs: &Tensor) -> Tensor {
+                self.predict_logits_record.lock().unwrap().push(xs.clone());
+                Tensor::new(&[[0f32; 5]], &self.device()).unwrap()
+            }
+
+            fn context_size(&self) -> usize {
+                3
+            }
+        }
+
+        let model_spy = ModelSpy::new();
+        let input_ids = vec![];
+        let mut it = GenerateIter::new(&model_spy, CountingSampler::new(5), input_ids);
+        it.next().unwrap();
+        it.next().unwrap();
+        it.next().unwrap();
+        it.next().unwrap();
+        it.next().unwrap();
+        it.next().unwrap();
+
+        let record = model_spy.take_recorded_predict_logits();
+
+        let token_ids = |i: usize| record[i].squeeze(0).unwrap().to_vec1::<u32>().unwrap();
+
+        assert_eq!(&token_ids(0), &[0u32; 0]);
+        assert_eq!(&token_ids(1), &[0u32]);
+        assert_eq!(&token_ids(2), &[0u32, 1]);
+        assert_eq!(&token_ids(3), &[0u32, 1, 2]);
+        // We specified a context size of three, so we only see the last three input tokens
+        assert_eq!(&token_ids(4), &[1u32, 2, 3]);
+        assert_eq!(&token_ids(5), &[2u32, 3, 4]);
+    }
+
+    /// Fake sampler which samples tokens round robind iterating through the indices
+    struct CountingSampler {
+        current: u32,
+        vocab_size: u32,
+    }
+
+    impl CountingSampler {
+        pub fn new(vocab_size: u32) -> Self {
+            Self {
+                current: 0,
+                vocab_size,
+            }
+        }
+    }
+
+    impl Sampler for CountingSampler {
+        fn sample_single(&mut self, _logits: &Tensor) -> u32 {
+            let next = self.current % self.vocab_size;
+            self.current += 1;
+            next
+        }
     }
 }
