@@ -52,18 +52,23 @@ impl Model {
 impl ModuleT for Model {
     fn forward_t(&self, xs: &Tensor, train: bool) -> candle_core::Result<Tensor> {
         // xs in batch, time (context) and its elements range from 0 to vocab size
-        let (_b, t) = xs.dims2().unwrap();
+        let (b, t) = xs.dims2().unwrap();
         // returns batch, time, embedding_dimension
         let token_embeddings = self.token_embedding.forward_t(xs, train).unwrap();
         // Position would be a 1 dimensional vector in the time dimension
-        // let position = Tensor::arange::<u32>(0, t as u32, xs.device()).unwrap();
-        // let positional_embeddings = self
-        //     .positional_embedding
-        //     .forward_t(&position, train)
-        //     .unwrap();
-        // let x = (token_embeddings + positional_embeddings).unwrap();
+        let position = Tensor::arange::<u32>(0, t as u32, xs.device()).unwrap();
+        // Postional embeddings have dimension (time (context), channel (embedding size))
+        let positional_embeddings = self
+            .positional_embedding
+            .forward_t(&position, train)
+            .unwrap();
+        // We need to add the batch dimension to the positional embeddings
+        let positional_embeddings = positional_embeddings
+            .broadcast_as((b, t, EMBEDDING_DIMENSION))
+            .unwrap();
+        let x = (token_embeddings + positional_embeddings).unwrap();
         // We use a linear layer to map the channel back to the vocabulary size.
-        let logits = self.lm_head.forward_t(&token_embeddings, train).unwrap();
+        let logits = self.lm_head.forward_t(&x, train).unwrap();
         Ok(logits)
     }
 }
@@ -132,7 +137,7 @@ impl Trainable for Model {
 
 #[cfg(test)]
 mod tests {
-    use candle_core::Tensor;
+    use candle_core::{Device, Tensor};
     use candle_nn::ModuleT;
 
     use crate::{
@@ -172,5 +177,14 @@ mod tests {
 
         let logits_second_batch = logits.get_on_dim(0, 1).unwrap().to_vec1::<f32>().unwrap();
         assert_eq!([21f32, 22., 23.].as_slice(), logits_second_batch);
+    }
+
+    #[test]
+    fn learning_test_broadcast() {
+        let x = Tensor::new(&[1u32, 2, 3], &Device::Cpu).unwrap();
+        let x = x.broadcast_as((2, 3)).unwrap();
+
+        // [[1, 2, 3], [1, 2, 3]]
+        eprintln!("{:?}", x.to_vec2::<u32>().unwrap());
     }
 }
