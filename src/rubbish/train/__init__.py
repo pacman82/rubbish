@@ -3,6 +3,7 @@ from typing import Callable
 
 import torch
 from torch.optim import AdamW
+from torch.types import Tensor
 
 from rubbish.data import Data
 from rubbish.model import CONTEXT_SIZE, BigramLanguageModel
@@ -14,7 +15,9 @@ eval_interval = 4000
 
 
 @torch.no_grad()
-def estimate_loss(model: BigramLanguageModel, data: Data, device: str):
+def estimate_loss(
+    model: BigramLanguageModel, data: Data, device: str
+) -> dict[str, Tensor]:
     out = {}
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iterations)
