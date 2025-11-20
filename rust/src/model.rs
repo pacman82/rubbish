@@ -1,7 +1,7 @@
 use candle_core::{Device, Tensor, Var};
 use candle_nn::{Embedding, Linear, ModuleT, VarBuilder, VarMap};
 
-use crate::{CONTEXT_SIZE, train::Trainable};
+use crate::train::Trainable;
 
 const EMBEDDING_DIMENSION: usize = 32;
 
@@ -16,7 +16,7 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn new(device: Device, vocab_size: usize) -> Self {
+    pub fn new(device: Device, vocab_size: usize, context_size: usize) -> Self {
         let var_map = VarMap::new();
         let vb = VarBuilder::from_varmap(&var_map, candle_core::DType::F32, &device);
         let token_embedding = candle_nn::embedding(
@@ -26,7 +26,7 @@ impl Model {
         )
         .unwrap();
         let positional_embedding = candle_nn::embedding(
-            CONTEXT_SIZE,
+            context_size,
             EMBEDDING_DIMENSION,
             vb.pp("positional_embedding_table"),
         )
@@ -104,14 +104,19 @@ mod tests {
     fn logits_have_dim_batch_time_vocab_size() {
         let device = choose_device();
         let vocab_size = 5;
-        let time = 1;
+        let sequence_length_input = 1;
+        let context_size = 3;
         let batch_size = 2;
-        let tensor = Tensor::zeros((batch_size, time), DType::U32, &device).unwrap();
-        let model = Model::new(device, vocab_size);
+        let tensor =
+            Tensor::zeros((batch_size, sequence_length_input), DType::U32, &device).unwrap();
+        let model = Model::new(device, vocab_size, context_size);
 
         let logit = model.forward_t(&tensor, false).unwrap();
 
-        assert_eq!((batch_size, time, vocab_size), logit.dims3().unwrap());
+        assert_eq!(
+            (batch_size, sequence_length_input, vocab_size),
+            logit.dims3().unwrap()
+        );
     }
 
     #[test]

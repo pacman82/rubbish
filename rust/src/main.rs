@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
 
     let batch_sampler = Data::new(tokenized, &device, rng());
 
-    let model = Model::new(device.clone(), tokenizer.vocab_size());
+    let model = Model::new(device.clone(), tokenizer.vocab_size(), CONTEXT_SIZE);
     eprintln!(
         "Number of trainable parameters: {}",
         model.number_of_parameters()
