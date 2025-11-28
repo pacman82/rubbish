@@ -1,7 +1,9 @@
+mod head;
+
 use candle_core::{Device, Tensor, Var};
 use candle_nn::{Embedding, Linear, ModuleT, VarBuilder, VarMap};
 
-use crate::train::Trainable;
+use crate::{model::head::Head, train::Trainable};
 
 const EMBEDDING_DIMENSION: usize = 32;
 
@@ -10,6 +12,7 @@ pub struct Model {
     token_embedding: Embedding,
     /// Maps token position to embedding vector
     positional_embedding: Embedding,
+    head: Head,
     /// Maps back to vocab size
     lm_head: Linear,
     var_map: VarMap,
@@ -31,11 +34,13 @@ impl Model {
             vb.pp("positional_embedding_table"),
         )
         .unwrap();
+        let head = Head::new(EMBEDDING_DIMENSION, 16, vb.pp("attention_head"));
         let lm_head = candle_nn::linear(EMBEDDING_DIMENSION, vocab_size, vb.pp("lm_head")).unwrap();
         Self {
             token_embedding,
             positional_embedding,
             lm_head,
+            head,
             var_map,
         }
     }
@@ -67,6 +72,7 @@ impl ModuleT for Model {
             .broadcast_as((b, t, EMBEDDING_DIMENSION))
             .unwrap();
         let x = (token_embeddings + positional_embeddings).unwrap();
+        let affinity = self.head.forward_t(&x, train).unwrap();
         // We use a linear layer to map the channel back to the vocabulary size.
         // I.e Batch, Time, Embedding size -> Batch, Time, Vocab Size
         let logits = self.lm_head.forward_t(&x, train).unwrap();
