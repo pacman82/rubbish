@@ -8,8 +8,8 @@ from torch.types import Tensor
 from rubbish.data import Data
 from rubbish.model import CONTEXT_SIZE, BigramLanguageModel
 
-learning_rate = 1e-5
-max_iterations = 50000
+learning_rate = 1e-6
+max_iterations = 20000
 eval_iterations = 1600
 eval_interval = 4000
 

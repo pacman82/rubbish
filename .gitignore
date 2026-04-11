@@ -11,3 +11,6 @@ wheels/
 
 # Rust-generated files
 /rust/target
+# pixi environments
+.pixi/*
+!.pixi/config.toml
