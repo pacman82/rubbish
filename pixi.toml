@@ -1,0 +1,14 @@
+[workspace]
+authors = ["Markus Klein <markus-klein@live.de>"]
+channels = ["conda-forge"]
+name = "rubbish"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+cuda-toolkit = "<13"
+
+[activation.env]
+CUDA_ROOT = "$CONDA_PREFIX/targets/$(uname -m)-linux"
